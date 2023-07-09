@@ -1,0 +1,19 @@
+---
+          
+    - name: Tomcat deployment playbook
+      hosts: 172.31.83.127
+      become: true
+      become_user: root
+      remote_user: ubuntu
+      roles:
+        - tomcat
+
+    - name: Maven  deployment playbook
+      hosts: 172.31.83.127
+      become: true
+      become_user: root
+      remote_user: ubuntu
+      roles:
+        - maven  
+
+

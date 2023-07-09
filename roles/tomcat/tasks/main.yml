@@ -13,43 +13,77 @@
   become: True
   become_method: sudo
 
-# Downloading the tomcat package
-- name: Download Tomcat
-  get_url: 
-     url:  "{{ tomcat_download_url }}"
-     dest: "{{ tomcat_download_location }}"
+- name: Install acl
+  apt: 
+   state: latest
+   update_cache: true
+   pkg:
+     - acl
 
-# Creating the tomcat directory
-- name: Create a tomcat directory
+
+- name: Create a Directory /opt/tomcat9
+  become: yes
   file:
-    path: /usr/share/tomcat
+    path: /opt/tomcat9
     state: directory
+    mode: 0755
     owner: tomcat
     group: tomcat
 
-# Extracting the tomcat archive 
-- name: Extract tomcat archive
+
+- name: Download Tomcat using unarchive
+  become: yes
   unarchive:
-    src: "{{ tomcat_download_location }}"
-    dest: /usr/share/tomcat
+    src: "https://dlcdn.apache.org/tomcat/tomcat-9/v9.0.76/bin/apache-tomcat-9.0.76.tar.gz"
+    dest: /opt/tomcat9
+    mode: 0755
+    remote_src: yes
+    group: tomcat
+    owner: tomcat
+
+- name: Change ownership
+  file:
+    path: /opt/tomcat9
     owner: tomcat
     group: tomcat
-    remote_src: yes
-    extra_opts: "--strip-components=1"
-    creates: /usr/share/tomcat/bin
+    mode: "u+rwx,g+rx,o=rx"
+    recurse: yes
+    state: directory
 
-# Copying the tomcat template file to the destination node
-- name: Copy tomcat service file
-  template:
-    src: templates/tomcat.service.j2
-    dest: /etc/systemd/system/tomcat.service
-  when: ansible_service_mgr == "systems"
+- name: Copy Tomcat service from local to remote
+  copy:
+     src: templates/tomcat.service
+     dest: /etc/systemd/system/tomcat.service
+     mode: 0755    
+#- name: Move files to the /opt/tomcat9 directory
+ # become: true
+  #become_user: tomcat
+  #shell: "mv /opt/tomcat9/apache*/* /opt/tomcat9"
+#- name: Copy file with owner and permissions
+ # ansible.builtin.copy:
+  #  src: /opt/tomcat9
+   # dest: /opt/tomcat9
+    #owner: tomcat
+    #group: tomcat
+    #mode: 0644   
+- name: Reload the SystemD to re-read configurations
+  become: yes
+  systemd:
+     daemon-reload: yes
 
-# Starting and Enabling the tomcat service on the destination node.
-- name: Start and enable tomcat
-  service:
-    daemon_reload: yes
-    name: tomcat
-    state: started
-    enabled: yes
-  when: ansible_service_mgr == "systemd"
+- name: Enable the tomcat service and start
+  become: yes
+  systemd:
+     name: tomcat
+     enabled: yes
+     state: started
+
+- name: Connect to Tomcat server on port 8080 and check status 200 - Try 5 times
+  tags: test
+  uri:
+    url: http://localhost:8080
+  register: result
+  until: "result.status == 200"
+  retries: 5
+  delay: 10
+
